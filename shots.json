@@ -1,0 +1,1 @@
+{"lose":"http://localhost:8080/?shot=lose&seed=1","play":"http://localhost:8080/?shot=play&seed=1","start":"http://localhost:8080/?shot=start&seed=1","win":"http://localhost:8080/?shot=win&seed=1"}
