@@ -49,6 +49,43 @@
     ctx.fillText('\u25B2', 640, 400);
   }
 
+  // Greedy word-wrap measured with the live canvas font, so text is
+  // only split where it truly fits inside maxWidth. Returns at most
+  // maxLines lines; a single over-long word is hard-split, and any
+  // overflow past the last line is refitted with an ellipsis.
+  function wrapMeasured(ctx, text, maxWidth, maxLines) {
+    var words = String(text || '').split(/\s+/).filter(Boolean);
+    var lines = [];
+    var cur = '';
+    function pushCur() { if (cur) { lines.push(cur); cur = ''; } }
+    for (var i = 0; i < words.length; i++) {
+      var word = words[i];
+      while (ctx.measureText(word).width > maxWidth && word.length > 1) {
+        var cut = 1;
+        while (cut < word.length && ctx.measureText(word.slice(0, cut + 1)).width <= maxWidth) cut++;
+        pushCur();
+        lines.push(word.slice(0, cut));
+        word = word.slice(cut);
+      }
+      var trial = cur ? cur + ' ' + word : word;
+      if (ctx.measureText(trial).width <= maxWidth) {
+        cur = trial;
+      } else {
+        pushCur();
+        cur = word;
+      }
+    }
+    pushCur();
+    if (lines.length <= maxLines) return lines.length ? lines : [''];
+    var kept = lines.slice(0, maxLines);
+    var fitted = kept[maxLines - 1];
+    while (fitted.length > 1 && ctx.measureText(fitted + ' \u2026').width > maxWidth) {
+      fitted = fitted.slice(0, -1);
+    }
+    kept[maxLines - 1] = fitted + ' \u2026';
+    return kept;
+  }
+
   function drawCard(ctx, card, x, y, w, h, faceDown, dimmed) {
     ctx.save();
     if (dimmed) ctx.globalAlpha = 0.45;
@@ -90,36 +127,58 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(card.cost), x + 26 * s, y + 27 * s);
-    // Suit symbol, big and centred.
+    // Suit symbol, big and centred, kept high so the name zone below
+    // it has a clear run.
     ctx.fillStyle = info.color;
-    ctx.font = 'bold ' + Math.round(64 * s) + 'px Georgia, serif';
-    ctx.fillText(info.symbol, x + w / 2, y + 82 * s);
+    ctx.font = 'bold ' + Math.round(56 * s) + 'px Georgia, serif';
+    ctx.fillText(info.symbol, x + w / 2, y + 74 * s);
     // Suit name.
-    ctx.font = 'bold ' + Math.round(20 * s) + 'px Arial, sans-serif';
-    ctx.fillText(String(card.suit).toUpperCase(), x + w / 2, y + 128 * s);
-    // Card name, wrapped over at most two lines.
-    ctx.fillStyle = '#222222';
     ctx.font = 'bold ' + Math.round(19 * s) + 'px Arial, sans-serif';
+    ctx.fillText(String(card.suit).toUpperCase(), x + w / 2, y + 114 * s);
+    // Thin rule separating the suit from the name zone.
+    ctx.strokeStyle = 'rgba(58,42,24,0.35)';
+    ctx.lineWidth = 1.5 * s;
+    ctx.beginPath();
+    ctx.moveTo(x + 16 * s, y + 126 * s);
+    ctx.lineTo(x + w - 16 * s, y + 126 * s);
+    ctx.stroke();
+    // Card name: measured wrap over at most two lines in a dedicated
+    // band (baselines 144s / 162s), with 14s padding on each side.
+    // The font shrinks from 17s until both lines fit, so long names
+    // like "Vine Assassin" and "Deepcurrent Spy" stay inside the
+    // card instead of running to the edge.
+    ctx.fillStyle = '#222222';
     var name = String(card.name || '');
-    if (name.length > 14) {
-      var mid = name.lastIndexOf(' ', 13);
-      if (mid > 0) {
-        ctx.fillText(name.slice(0, mid), x + w / 2, y + 156 * s);
-        ctx.fillText(name.slice(mid + 1), x + w / 2, y + 178 * s);
-      } else {
-        ctx.fillText(name, x + w / 2, y + 166 * s);
+    var nameMaxW = w - 28 * s;
+    var nameLines = [];
+    var nameSize = 17;
+    while (nameSize >= 12) {
+      ctx.font = 'bold ' + Math.round(nameSize * s) + 'px Arial, sans-serif';
+      nameLines = wrapMeasured(ctx, name, nameMaxW, 2);
+      var widest = 0;
+      for (var li = 0; li < nameLines.length; li++) {
+        widest = Math.max(widest, ctx.measureText(nameLines[li]).width);
       }
-    } else {
-      ctx.fillText(name, x + w / 2, y + 166 * s);
+      if (widest <= nameMaxW) break;
+      nameSize -= 1;
     }
-    // Attack, bottom right.
+    ctx.font = 'bold ' + Math.round(nameSize * s) + 'px Arial, sans-serif';
+    if (nameLines.length === 1) {
+      ctx.fillText(nameLines[0], x + w / 2, y + 153 * s);
+    } else {
+      ctx.fillText(nameLines[0], x + w / 2, y + 144 * s);
+      ctx.fillText(nameLines[1], x + w / 2, y + 162 * s);
+    }
+    // Attack badge, bottom-right corner, smaller and tucked into the
+    // corner: its top edge sits at h-41s, below the name band
+    // (which ends at ~166s), so it can never cover a name.
     ctx.fillStyle = '#7a1f1f';
     ctx.beginPath();
-    ctx.arc(x + w - 26 * s, y + h - 26 * s, 20 * s, 0, Math.PI * 2);
+    ctx.arc(x + w - 24 * s, y + h - 24 * s, 17 * s, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold ' + Math.round(24 * s) + 'px Arial, sans-serif';
-    ctx.fillText(String(card.attack), x + w - 26 * s, y + h - 25 * s);
+    ctx.font = 'bold ' + Math.round(22 * s) + 'px Arial, sans-serif';
+    ctx.fillText(String(card.attack), x + w - 24 * s, y + h - 23 * s);
     ctx.restore();
   }
 
@@ -239,24 +298,36 @@
     ctx.fillText('Rival deck: ' + (state.aiDeck ? state.aiDeck.length : 0), 48, 400);
     ctx.textAlign = 'right';
     ctx.fillText('Your deck: ' + (state.playerDeck ? state.playerDeck.length : 0), 1232, 400);
-    // Chain bonus, loud and central, in the gap above the player hand.
+    // Chain bonus, central, in the narrow gap between the player
+    // table (ends 500) and the player hand (starts 528): a smaller
+    // 22px line at y 521, clear of both rows.
     if (state.lastChain) {
       ctx.fillStyle = '#ffd54f';
-      ctx.font = 'bold 32px Arial, sans-serif';
+      ctx.font = 'bold 22px Arial, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('+2 CHAIN!  ' + String(state.lastChain.suit).toUpperCase(), 640, 534);
+      ctx.fillText('+2 CHAIN!  ' + String(state.lastChain.suit).toUpperCase(), 640, 521);
     }
-    // Scrolling log: last 5 lines, bottom-left beside the player hand
-    // (the hand is centred, so the left margin is free).
+    // Scrolling log: last 3 entries, each word-wrapped onto up to 3
+    // lines at 13px so the full text stays readable. It lives in the
+    // left margin beside the player hand (the hand is centred, so
+    // that strip is free) and is never truncated mid-word.
     var log = state.log || [];
-    var lines = log.slice(-5);
+    var logEntries = log.slice(-3);
+    var logWrapped = [];
+    ctx.font = '13px Arial, sans-serif';
+    for (var li = 0; li < logEntries.length; li++) {
+      var wrapped = wrapMeasured(ctx, String(logEntries[li]), 192, 3);
+      for (var wi = 0; wi < wrapped.length; wi++) logWrapped.push(wrapped[wi]);
+    }
+    // Cap the block at the last 8 visual lines if a long entry overflows.
+    if (logWrapped.length > 8) logWrapped = logWrapped.slice(logWrapped.length - 8);
     ctx.textAlign = 'left';
-    ctx.font = '15px Arial, sans-serif';
-    for (var i = 0; i < lines.length; i++) {
+    ctx.textBaseline = 'alphabetic';
+    for (var i = 0; i < logWrapped.length; i++) {
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.fillRect(40, 566 + i * 26 - 17, 192, 22);
+      ctx.fillRect(40, 556 + i * 17 - 13, 200, 15);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(String(lines[i]).slice(0, 24), 44, 566 + i * 26);
+      ctx.fillText(logWrapped[i], 44, 556 + i * 17);
     }
   }
 
@@ -289,6 +360,18 @@
     ctx.fillText(hint, 640, py + panelH - 44);
   }
 
+  // Control hints live in their own band below the player hand
+  // (the hand ends at 738), never drawn over any card.
+  function drawFooterHint(ctx) {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(30, 748, W - 60, 40);
+    ctx.fillStyle = '#ffe082';
+    ctx.font = 'bold 18px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('Keys 1\u20135 play a card  \u00B7  M sound  \u00B7  R restart', W / 2, 774);
+  }
+
   // Main entry point. Draws the live table first, then any phase overlay.
   function emberRender(state) {
     var canvas = document.getElementById('ember-court');
@@ -305,7 +388,7 @@
     drawHandRow(ctx, state.aiHand, 78, true, state, false, 90, 126);
     drawTableRow(ctx, state.aiTable, 218, 'RIVAL TABLE');
     drawTableRow(ctx, state.playerTable, 366, 'YOUR TABLE');
-    drawHandRow(ctx, state.playerHand, 548, false, state, true);
+    drawHandRow(ctx, state.playerHand, 528, false, state, true);
     drawHud(ctx, state);
 
     if (state.phase === 'title') {
@@ -313,10 +396,6 @@
         'A tactical card battler \u2014 reduce the rival\u2019s 30 life to 0',
         'Play cards, chain matching suits for +2, win 2 of 3 rounds.'
       ], 'Click or press Enter to begin');
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '20px Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Keys 1\u20135 play a card  \u00B7  M sound  \u00B7  R restart', 640, 800 - 96);
     } else if (state.phase === 'won' || state.phase === 'lost') {
       var life = lifeOf(state);
       if (state.phase === 'won') {
@@ -331,6 +410,8 @@
         ], 'Press R to play again');
       }
     }
+    // Footer band last, so it stays readable over every phase.
+    drawFooterHint(ctx);
   }
 
   window.emberRender = emberRender;

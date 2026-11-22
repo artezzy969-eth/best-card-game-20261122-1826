@@ -86,24 +86,54 @@
     }
 
     if (shot === 'win') {
+      // Played-out endgame: round 3, 2 cards on each table dealt
+      // deterministically from the seeded decks (same approach as
+      // the play shot), hands refilled to 5, You 30 — Rival 0.
       state.phase = 'won';
       state.winner = 'player';
+      state.round = 3;
+      state.turn = 'player';
+      state.playerLife = 30;
       state.aiLife = 0;
-      if (typeof state.playerLife !== 'number' || state.playerLife <= 0) {
-        state.playerLife = 12;
-      }
+      state.playerMana = 5;
+      state.aiMana = 5;
       state.lastChain = null;
+      topUpHand(state, 'player');
+      topUpHand(state, 'ai');
+      state.playerTable = dealFrom(state.playerDeck, 2);
+      state.aiTable = dealFrom(state.aiDeck, 2);
+      topUpHand(state, 'player');
+      topUpHand(state, 'ai');
+      state.log = [
+        'Round 3 \u2014 you struck for 6.',
+        'The rival court falls. You win the Ember Court!'
+      ];
       return;
     }
 
     if (shot === 'lose') {
+      // Played-out endgame: round 3, 2 cards on each table dealt
+      // deterministically from the seeded decks (same approach as
+      // the play shot), hands refilled to 5, You 0 — Rival 30.
       state.phase = 'lost';
       state.winner = 'ai';
+      state.round = 3;
+      state.turn = 'player';
       state.playerLife = 0;
-      if (typeof state.aiLife !== 'number' || state.aiLife <= 0) {
-        state.aiLife = 9;
-      }
+      state.aiLife = 30;
+      state.playerMana = 5;
+      state.aiMana = 5;
       state.lastChain = null;
+      topUpHand(state, 'player');
+      topUpHand(state, 'ai');
+      state.playerTable = dealFrom(state.playerDeck, 2);
+      state.aiTable = dealFrom(state.aiDeck, 2);
+      topUpHand(state, 'player');
+      topUpHand(state, 'ai');
+      state.log = [
+        'Round 3 \u2014 the rival struck for 6.',
+        'Your court falls. The rival wins the Ember Court.'
+      ];
       return;
     }
 
